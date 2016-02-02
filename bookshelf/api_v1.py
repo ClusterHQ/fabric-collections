@@ -459,7 +459,7 @@ def get_gce_instance_config(instance_name, project, zone, machine_type, image,
         "networkInterfaces": [
             {
                 "network": (
-                    "projects/clusterhq-acceptance/global/networks/default"
+                    "projects/%s/global/networks/default" % project
                 ),
                 "accessConfigs": [
                     {
