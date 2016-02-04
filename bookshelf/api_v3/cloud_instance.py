@@ -1,7 +1,5 @@
 from zope.interface import Interface
 
-STATE_FILE_NAME = '.state.json'
-
 
 class ICloudInstance(Interface):
     # @classmethod
@@ -17,6 +15,7 @@ class ICloudInstance(Interface):
     def create_image(name, description):
         """Creates an image and leaves it in an up state
         """
+
     def destroy():
         """
         Destroys an existing image

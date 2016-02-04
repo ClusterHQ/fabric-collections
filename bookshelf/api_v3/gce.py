@@ -16,34 +16,22 @@ from bookshelf.api_v1 import (
 
 from zope.interface import implementer
 
-from cloud_instance import ICloudInstance, STATE_FILE_NAME
+from cloud_instance import ICloudInstance
 
-
-
-
-# create_from_config
-# create_from_state
-#
-# create_image(name, description)
-# -- leaves image in an up state
-# destroy
-# down
-# up
-# (getters for key_filename, username, public_dns_name, distribution, region)
-# serialize_to_state
-# -- return errors if downing a downed instance or upping an instance that is up
 
 @implementer(ICloudInstance)
 class GCE(object):
 
+    cloud = 'gce'
+
     def __init__(self, config, distro):
+
         self.distro = distro
 
         # config
         self.project = config['project']
         self.zone = config['zone']
         self.public_key_filename = config['public_key_filename']
-        self.private_key_filename = config['private_key_filename']
         self.machine_type = config['machine_type']
         self.username = config['username']
 
@@ -80,13 +68,7 @@ class GCE(object):
         # if we've restarted a terminated server, the ip address
         # might have changed from our saved state, get the
         # networking info and resave the state
-        instance_ip = gce_instance._get_instance_networking(
-            gce_instance.instance_name)
-        gce_instance._save_state_locally(
-            instance_name=gce_instance.instance_name,
-            ip_address=instance_ip
-        )
-
+        gce_instance._set_instance_networking(gce_instance.instance_name)
         return gce_instance
 
     def ensure_instance_running(self, instance_name):
@@ -130,34 +112,29 @@ class GCE(object):
         self._wait_until_done(operation)
 
 
-    def _get_instance_networking(self, instance_name):
+    def _set_instance_networking(self):
         instance_data = self._compute.instances().get(
-            project=self.project, zone=self.zone, instance=instance_name
+            project=self.project, zone=self.zone, instance=self.instance_name
         ).execute()
 
-        self.instance_ip = (
+        self.ip_address = (
             instance_data['networkInterfaces'][0]['accessConfigs'][0]['natIP']
         )
-        wait_for_ssh(self.instance_ip)
+        wait_for_ssh(self.ip_address)
 
-        log_green('Server has IP address {0}.'.format(self.instance_ip))
-        return self.instance_ip
+        log_green('Server has IP address {0}.'.format(self.ip_address))
 
 
     def _create_server(self):
-
         log_green("Started...")
         log_yellow("...Creating GCE instance...")
         latest_image = self._get_latest_image(
             self.base_image_project, self.base_image_prefix)
 
-        self.startup_instance(instance_name,
+        self.startup_instance(self.instance_name,
                               latest_image['selfLink'],
                               disk_name=None)
-
-        instance_ip = self._get_instance_networking(instance_name)
-        self._save_state_locally(instance_name=instance_name,
-                                ip_address=instance_ip)
+        self._set_instance_networking()
 
 
     def create_image(self, image_name):
@@ -296,7 +273,6 @@ class GCE(object):
         instance_config = self._get_instance_config(
             instance_name, image, disk_name
         )
-        pprint(instance_config)
         operation = self._compute.instances().insert(
             project=self.project,
             zone=self.zone,
@@ -355,13 +331,12 @@ class GCE(object):
         timeout = 5*60  # seconds
         while not done:
             latest_operation = update().execute()
-            log_yellow("waiting for operation")
             if (latest_operation['status'] == 'DONE' or
                     time() - start > timeout):
                 done = True
             else:
                 sleep(10)
-                print "waiting for operation"
+                log_yellow("waiting for operation")
         return latest_operation
 
 
@@ -397,16 +372,15 @@ class GCE(object):
         return latest_image
 
 
-    def _get_state(self, instance_name, ip_address):
+    def get_state(self):
         # The minimum amount of data necessary to keep machine state
         # everything else can be pulled from the config
 
         data = {
-            'ip_address': ip_address,
-            'instance_name': instance_name,
+            'ip_address': self.ip_address,
+            'instance_name': self.instance_name,
             'distro': self.distro,
         }
-        data['distribution'] = linux_distribution(self.username, ip_address)
-        data['os_release'] = os_release(self.username, ip_address)
-        with open(STATE_FILE_NAME, 'w') as f:
-            json.dump(data, f)
+
+        data['distribution'] = linux_distribution(self.username, self.ip_address)
+        data['os_release'] = os_release(self.username, self.ip_address)
