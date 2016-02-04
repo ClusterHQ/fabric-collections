@@ -68,7 +68,7 @@ class GCE(object):
         # if we've restarted a terminated server, the ip address
         # might have changed from our saved state, get the
         # networking info and resave the state
-        gce_instance._set_instance_networking(gce_instance.instance_name)
+        gce_instance._set_instance_networking()
         return gce_instance
 
     def ensure_instance_running(self, instance_name):
@@ -168,7 +168,7 @@ class GCE(object):
             self._compute.images().insert(
                 project=self.project, body=body).execute()
         )
-        return self.description
+        return image_name
 
 
     def down(self):
@@ -384,3 +384,4 @@ class GCE(object):
 
         data['distribution'] = linux_distribution(self.username, self.ip_address)
         data['os_release'] = os_release(self.username, self.ip_address)
+        return data
