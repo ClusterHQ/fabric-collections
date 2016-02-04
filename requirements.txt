@@ -6,6 +6,9 @@ pyrax
 boto
 moto
 ipython
+oauth2client
+google-api-python-client
+zope.interface
 # paramiko doesn't support recent SSH macs
 # https://github.com/paramiko/paramiko/pull/581
 -e git+https://github.com/ericwb/paramiko.git@rfc6668#egg=paramiko
