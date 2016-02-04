@@ -84,13 +84,8 @@ class ICloudInstance(Interface):
         running. Note that this must be done in a way where the instance can be
         started again.
         """
-    def up():
-        """
-        Starts an existing instance. Throws an exception if the instance is
-        already running.
-        """
 
-    def serialize_to_state():
+    def get_state():
         """
         Serializes this instance to a dictionary that can be passed to
         ``ICloudInstanceFactory.create_from_saved_state`` in order to
