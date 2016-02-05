@@ -1,8 +1,6 @@
 import socket
-import json
 from time import time, sleep
 import uuid
-from pprint import pprint
 
 
 from oauth2client.client import GoogleCredentials
@@ -14,12 +12,13 @@ from bookshelf.api_v1 import (
     wait_for_ssh, linux_distribution, os_release
 )
 
-from zope.interface import implementer
+from zope.interface import implementer, provider
 
-from cloud_instance import ICloudInstance
+from cloud_instance import ICloudInstance, ICloudInstanceFactory
 
 
 @implementer(ICloudInstance)
+@provider(ICloudInstanceFactory)
 class GCE(object):
 
     cloud = 'gce'
