@@ -1,7 +1,7 @@
 docker-fabric
 fabric
 cuisine==0.7.11
-enum
+flufl.enum
 pyrax
 boto
 moto

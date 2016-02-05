@@ -1,5 +1,5 @@
 from zope.interface import Interface, Attribute
-from enum import Enum
+from flufl.enum import Enum
 
 
 class Distribution(Enum):
@@ -66,12 +66,24 @@ class ICloudInstance(Interface):
     key_filename = Attribute(
         """The filename of the private key to use to log into the instance.""")
 
+    cloud_type = Attribute(
+        """The name of the cloud this instance comes from.""")
+
+    distro = Attribute(
+        """The distribution on the instance. Should be one of the above """
+        """Distributions.""")
+
+    name = Attribute(
+        """The human readable name of the instance.""")
+
     def create_image(image_name):
         """
         Creates an image from the boot disk of the instance, and leaves the
         instance in an up (booted) state.
 
         :param unicode image_name: The name of the image to create.
+
+        :returns: The unique identifier of the image.
         """
 
     def destroy():

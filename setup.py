@@ -15,6 +15,6 @@ setup(
               'bookshelf.tests.api_v2', ],
     install_requires=['cuisine', 'fabric', 'pyrax', 'boto',
                       'google-api-python-client', 'oauth2client',
-                      'zope.interface', 'enum', 'pyrsistent'],
+                      'zope.interface', 'flufl.enum', 'pyrsistent'],
     license='Apache License, Version 2.0',
 )

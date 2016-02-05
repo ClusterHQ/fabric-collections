@@ -166,7 +166,7 @@ class GCE(object):
             self._compute.images().insert(
                 project=self.project, body=body).execute()
         )
-        return self.description
+        return image_name
 
 
     def down(self):
