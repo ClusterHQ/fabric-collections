@@ -1,6 +1,5 @@
 # vim: ai ts=4 sts=4 et sw=4 ft=python fdm=indent et
 
-import boto.ec2
 
 from boto.ec2.blockdevicemapping import BlockDeviceMapping, EBSBlockDeviceType
 from fabric.api import env
@@ -8,17 +7,6 @@ from time import sleep
 from bookshelf.api_v2.time_helpers import sleep_for_one_minute
 from bookshelf.api_v2.logging_helpers import log_green, log_yellow, log_red
 from bookshelf.api_v2.cloud import wait_for_ssh
-
-
-def connect_to_ec2(region, access_key_id, secret_access_key):
-    """ returns a connection object to AWS EC2  """
-    conn = boto.ec2.connect_to_region(region,
-                                      aws_access_key_id=access_key_id,
-                                      aws_secret_access_key=secret_access_key)
-    if conn:
-        return conn
-    else:
-        return False
 
 
 def create_ami(connection,

@@ -20,7 +20,7 @@ class ICloudInstanceFactory(Interface):
     configuration.
     """
 
-    def create_from_config(config, distro):
+    def create_from_config(config, distro, region):
         """
         Creates a new instance of the specified distro from the given
         configuration.
@@ -30,6 +30,7 @@ class ICloudInstanceFactory(Interface):
             configuration language and passed directly to this layer.
         :param Distribution distro: The distribution to spin the instance up
             as.
+        :param unicode region: The region to spin the instance up within.
 
         :return: An :class:`ICloudInstance` provider for a newly created
             instance with type distro.

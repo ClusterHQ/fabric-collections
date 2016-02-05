@@ -23,13 +23,13 @@ class GCE(object):
 
     cloud = 'gce'
 
-    def __init__(self, config, distro):
+    def __init__(self, config, distro, region):
 
         self.distro = distro
 
         # config
         self.project = config['project']
-        self.zone = config['zone']
+        self.zone = region
         self.public_key_filename = config['public_key_filename']
         self.machine_type = config['machine_type']
         self.username = config['username']
@@ -49,18 +49,17 @@ class GCE(object):
         return socket.gethostbyaddr(self.ip_address)[0]
 
     @classmethod
-    def create_from_config(cls, config, distro):
-        gce_instance = GCE(config, distro)
+    def create_from_config(cls, config, region, distro):
+        gce_instance = GCE(config, distro, region)
         # we have no state so create a new instance
         gce_instance.instance_name = u"slave-image-prep-" + unicode(uuid.uuid4())
         gce_instance._create_server()
         return gce_instance
 
-
     @classmethod
     def create_from_saved_state(cls, config, saved_state):
         # state has to include credentials, could also take config
-        gce_instance = GCE(config, saved_state['distro'])
+        gce_instance = GCE(config, saved_state['distro'], saved_state['zone'])
         gce_instance.instance_name = saved_state['instance_name']
         gce_instance.distro = saved_state['distro']
         gce_instance.ensure_instance_running(saved_state['instance_name'])
@@ -379,6 +378,7 @@ class GCE(object):
             'ip_address': self.ip_address,
             'instance_name': self.instance_name,
             'distro': self.distro,
+            'zone': self.zone
         }
 
         data['distribution'] = linux_distribution(self.username, self.ip_address)
