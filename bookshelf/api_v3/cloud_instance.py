@@ -56,14 +56,18 @@ class ICloudInstance(Interface):
     """
     Interface for interacting with a single cloud interface.
     """
-    public_dns_name = Attribute(
-        """A name that will resolve to the instance.""")
-
     username = Attribute(
         """The username to use to log into the instance.""")
 
     key_filename = Attribute(
         """The filename of the private key to use to log into the instance.""")
+
+    distro = Attribute(
+        """The distribution used to create the base image. Must be one of the
+        enumerated values in Distribution.""")
+
+    ip_address = Attribute(
+        """Externally accessable IP address for the instance""")
 
     def create_image(image_name):
         """

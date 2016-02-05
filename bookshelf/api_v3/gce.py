@@ -2,7 +2,8 @@ import socket
 from time import time, sleep
 import uuid
 
-
+from zope.interface import implementer, provider
+from pyrsistent import PClass, field
 from oauth2client.client import GoogleCredentials
 from googleapiclient import discovery
 from googleapiclient.errors import HttpError
@@ -11,10 +12,31 @@ from bookshelf.api_v2.logging_helpers import log_green, log_yellow, log_red
 from bookshelf.api_v1 import (
     wait_for_ssh, linux_distribution, os_release
 )
-
-from zope.interface import implementer, provider
-
 from cloud_instance import ICloudInstance, ICloudInstanceFactory
+
+
+class DistributionConfiguration(PClass):
+    description = field(factory=unicode, mandatory=True)
+    instance_name = field(factory=unicode, mandatory=True)
+    base_image_prefix = field(factory=unicode, mandatory=True)
+    base_image_project = field(factory=unicode, mandatory=True)
+
+
+class GCEConfiguration(PClass):
+    machine_type = field(factory=unicode, mandatory=True)
+    username = field(factory=unicode, mandatory=True)
+    public_key_filename = field(factory=unicode, mandatory=True)
+    private_key_filename = field(factory=unicode, mandatory=True)
+    project = field(factory=unicode, mandatory=True)
+    ubuntu1404 = field(type=DistributionConfiguration, mandatory=True)
+    centos7 = field(type=DistributionConfiguration, mandatory=True)
+
+
+class GCEState(PClass):
+    instance_name = field(factory=unicode, mandatory=True)
+    ip_address = field(factory=unicode, mandatory=True)
+    distro = field(factory=unicode, mandatory=True)
+    zone = field(factory=unicode, mandatory=True)
 
 
 @implementer(ICloudInstance)
@@ -23,54 +45,82 @@ class GCE(object):
 
     cloud = 'gce'
 
-    def __init__(self, config, distro):
-
-        self.distro = distro
-
-        # config
-        self.project = config['project']
-        self.zone = config['zone']
-        self.public_key_filename = config['public_key_filename']
-        self.machine_type = config['machine_type']
-        self.username = config['username']
-
-        # distro
-        self.base_image_prefix = config[distro]['base_image_prefix']
-        self.base_image_project = config[distro]['base_image_project']
-        self.description = config[distro]['description']
-
-        # state (set when creating from saved state)
-        self.ip_address = None
-
+    def __init__(self, config, state):
+        self.config = GCEConfiguration.create(config)
+        distro = state.distro
+        self.distro_config = getattr(self.config, distro)
+        self.state = state
         self._compute = self._get_gce_compute()
+        # self.distro = distro
+
+        # # config
+        # self.project = config['project']
+        # self.zone = region
+        # self.public_key_filename = config['public_key_filename']
+        # self.machine_type = config['machine_type']
+        # self.username = config['username']
+
+        # # distro
+        # self.base_image_prefix = config[distro]['base_image_prefix']
+        # self.base_image_project = config[distro]['base_image_project']
+        # self.description = config[distro]['description']
+
+        # # state (set when creating from saved state)
+        # self.ip_address = None
 
     @property
-    def public_dns_name(self):
-        return socket.gethostbyaddr(self.ip_address)[0]
+    def project(self):
+        return self.config.project
+
+    @property
+    def zone(self):
+        return self.state.zone
+
+    @property
+    def distro(self):
+        return self.state.distro
+
+    @property
+    def description(self):
+        return self.distro_config.description
+
+    @property
+    def instance_name(self):
+        return self.state.instance_name
+
+    @property
+    def ip_address(self):
+        return self.state.ip_address
 
     @classmethod
-    def create_from_config(cls, config, distro):
-        gce_instance = GCE(config, distro)
-        # we have no state so create a new instance
-        gce_instance.instance_name = u"slave-image-prep-" + unicode(uuid.uuid4())
+    def create_from_config(cls, config, distro, region):
+        instance_name = "{}-{}".format(
+            config[distro]['instance_name'],
+            unicode(uuid.uuid4())
+        )
+        state = GCEState(
+            instance_name=instance_name,
+            ip_address="",
+            distro=distro,
+            zone=region
+        )
+        gce_instance = GCE(config, state)
         gce_instance._create_server()
         return gce_instance
 
 
     @classmethod
     def create_from_saved_state(cls, config, saved_state):
-        # state has to include credentials, could also take config
-        gce_instance = GCE(config, saved_state['distro'])
-        gce_instance.instance_name = saved_state['instance_name']
-        gce_instance.distro = saved_state['distro']
-        gce_instance.ensure_instance_running(saved_state['instance_name'])
+        state = GCEState.create(saved_state)
+        instance = GCE(config, state)
+        instance._ensure_instance_running(saved_state['instance_name'])
         # if we've restarted a terminated server, the ip address
         # might have changed from our saved state, get the
         # networking info and resave the state
-        gce_instance._set_instance_networking()
-        return gce_instance
+        instance._set_instance_networking()
+        return instance
 
-    def ensure_instance_running(self, instance_name):
+    def _ensure_instance_running(self, instance_name):
         try:
             instance_info = self._compute.instances().get(
                 project=self.project, zone=self.zone, instance=instance_name
@@ -91,8 +141,7 @@ class GCE(object):
                 log_red("Instance {} does not exist".format(
                     instance_name)
                 )
-                log_yellow("you might need to remove state file {}".format(
-                    STATE_FILE_NAME)
+                log_yellow("you might need to remove state file."
                 )
             else:
                 log_red("Unknown error querying for instance {}".format(
@@ -116,19 +165,21 @@ class GCE(object):
             project=self.project, zone=self.zone, instance=self.instance_name
         ).execute()
 
-        self.ip_address = (
+        ip_address = (
             instance_data['networkInterfaces'][0]['accessConfigs'][0]['natIP']
         )
-        wait_for_ssh(self.ip_address)
-
-        log_green('Server has IP address {0}.'.format(self.ip_address))
+        self.state = self.state.transform(['ip_address'], ip_address)
+        wait_for_ssh(self.state.ip_address)
+        log_green('Connected to server with IP address {0}.'.format(
+            ip_address))
 
 
     def _create_server(self):
         log_green("Started...")
         log_yellow("...Creating GCE instance...")
         latest_image = self._get_latest_image(
-            self.base_image_project, self.base_image_prefix)
+            self.distro_config.base_image_project,
+            self.distro_config.base_image_prefix)
 
         self.startup_instance(self.instance_name,
                               latest_image['selfLink'],
@@ -191,7 +242,7 @@ class GCE(object):
                             instance_name,
                             image,
                             disk_name=None):
-        public_key = open(self.public_key_filename, 'r').read()
+        public_key = open(self.config.public_key_filename, 'r').read()
         if disk_name:
             disk_config = {
                 "type": "PERSISTENT",
@@ -220,7 +271,7 @@ class GCE(object):
             'name': instance_name,
             'machineType': (
                 "projects/{}/zones/{}/machineTypes/{}".format(
-                    self.project, self.zone, self.machine_type)
+                    self.project, self.zone, self.config.machine_type)
                 ),
             'disks': [disk_config],
             "networkInterfaces": [
@@ -240,7 +291,8 @@ class GCE(object):
                 "items": [
                     {
                         "key": "sshKeys",
-                        "value": "{}:{}".format(self.username, public_key)
+                        "value": "{}:{}".format(self.config.username,
+                                                public_key)
                     }
                 ]
             },
@@ -340,13 +392,15 @@ class GCE(object):
 
 
     def _get_latest_image(self, base_image_project, image_name_prefix):
-        """ Gets the latest image for a distribution on gce.
+        """
+        Gets the latest image for a distribution on gce.
 
-        The best way to get a list of possible image_name_prefix values is to look
-        at the output from ``gcloud compute images list``
+        The best way to get a list of possible image_name_prefix
+        values is to look at the output from ``gcloud compute images
+        list``
 
-        If you don't have the gcloud executable installed, it can be pip installed:
-        ``pip install gcloud``
+        If you don't have the gcloud executable installed, it can be
+        pip installed: ``pip install gcloud``
 
         project, image_name_prefix examples:
         * ubuntu-os-cloud, ubuntu-1404
@@ -376,11 +430,9 @@ class GCE(object):
         # everything else can be pulled from the config
 
         data = {
-            'ip_address': self.ip_address,
-            'instance_name': self.instance_name,
-            'distro': self.distro,
+            'ip_address': self.state.ip_address,
+            'instance_name': self.state.instance_name,
+            'distro': self.state.distro,
+            'zone': self.state.zone,
         }
-
-        data['distribution'] = linux_distribution(self.username, self.ip_address)
-        data['os_release'] = os_release(self.username, self.ip_address)
         return data
