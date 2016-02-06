@@ -25,7 +25,6 @@ class RackspaceConfiguration(PClass):
     disk_name = field(factory=unicode, mandatory=True)
     disk_size = field(factory=unicode, mandatory=True)
     instance_type = field(factory=unicode, mandatory=True)
-    region = field(factory=unicode, mandatory=True)
     key_pair = field(factory=unicode, mandatory=True)
     public_key_filename = field(factory=unicode, mandatory=True)
     private_key_filename = field(factory=unicode, mandatory=True)
@@ -64,6 +63,10 @@ class Rackspace(object):
         return Distribution(self.state.distro)
 
     @property
+    def username(self):
+        return self.config.username
+
+    @property
     def description(self):
         return self.distro_config.description
 
@@ -74,6 +77,10 @@ class Rackspace(object):
     @property
     def name(self):
         return self.state.instance_name
+
+    @property
+    def key_filename(self):
+        return self.config.private_key_filename
 
     @classmethod
     def create_from_config(cls, config, distro, region):
@@ -130,8 +137,8 @@ class Rackspace(object):
             name=self.state.instance_name,
             flavor=flavor.id,
             image=image.id,
-            region=self.config.region,
-            availability_zone=self.config.region,
+            region=self.state.region,
+            availability_zone=self.state.region,
             key_name=self.config.key_pair
         )
 
