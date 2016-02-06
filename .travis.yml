@@ -31,4 +31,4 @@ env:
 install:
   - pip install .
 
-script: "python bookshelf/tests/$TEST_SUITE"
+script: "export PYTHONPATH=`pwd` && python bookshelf/tests/$TEST_SUITE"
