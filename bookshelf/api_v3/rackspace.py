@@ -1,4 +1,3 @@
-import socket
 from sys import exit
 from time import sleep
 import uuid
@@ -10,11 +9,9 @@ from novaclient.exceptions import NotFound
 from fabric.api import sudo, settings
 from fabric.context_managers import hide
 
-from bookshelf.api_v1 import (
-    wait_for_ssh, linux_distribution, os_release
-)
+from bookshelf.api_v1 import wait_for_ssh
 from bookshelf.api_v2.logging_helpers import log_green, log_yellow, log_red
-from cloud_instance import ICloudInstance, ICloudInstanceFactory
+from cloud_instance import ICloudInstance, ICloudInstanceFactory, Distribution
 
 
 class DistributionConfiguration(PClass):
@@ -53,7 +50,7 @@ class RackspaceState(PClass):
 @provider(ICloudInstanceFactory)
 class Rackspace(object):
 
-    cloud = 'rackspace'
+    cloud_type = 'rackspace'
 
     def __init__(self, config, state):
         self.config = RackspaceConfiguration.create(config)
@@ -64,7 +61,7 @@ class Rackspace(object):
 
     @property
     def distro(self):
-        return self.state.distro
+        return Distribution(self.state.distro)
 
     @property
     def description(self):
@@ -75,11 +72,12 @@ class Rackspace(object):
         return self.state.ip_address
 
     @property
-    def instance_name(self):
+    def name(self):
         return self.state.instance_name
 
     @classmethod
     def create_from_config(cls, config, distro, region):
+        distro = distro.value
         instance_name = "{}-{}".format(
             config[distro]['instance_name'],
             unicode(uuid.uuid4())
@@ -119,7 +117,7 @@ class Rackspace(object):
         return instance
 
     def _ensure_instance_running(self):
-        server = self._nova.servers.find(name=self.instance_name)
+        server = self._nova.servers.find(name=self.state.instance_name)
         if server.status != "ACTIVE":
             server.start()
         return server
@@ -129,7 +127,7 @@ class Rackspace(object):
         flavor = self._nova.flavors.find(name=self.config.instance_type)
         image = self._nova.images.find(name=self.distro_config.ami)
         server = self._nova.servers.create(
-            name=self.instance_name,
+            name=self.state.instance_name,
             flavor=flavor.id,
             image=image.id,
             region=self.config.region,
@@ -147,7 +145,6 @@ class Rackspace(object):
             exit(1)
         self._set_instance_networking(server)
 
-
     def _set_instance_networking(self, server):
         ip_address = server.accessIPv4
         if ip_address is None:
@@ -159,7 +156,6 @@ class Rackspace(object):
             ip_address)
         )
 
-
     def _connect_to_rackspace(self):
         """ returns a connection object to Rackspace  """
         pyrax.set_setting('identity_type', 'rackspace')
@@ -169,9 +165,8 @@ class Rackspace(object):
         nova = pyrax.connect_to_cloudservers(region=self.state.region)
         return nova
 
-
     def create_image(self, image_name):
-        server = self._nova.servers.find(name=self.instance_name)
+        server = self._nova.servers.find(name=self.state.instance_name)
         image_id = self._nova.servers.create_image(server.id,
                                                    image_name=image_name)
         image = self._nova.images.get(image_id).status.lower()
@@ -191,9 +186,8 @@ class Rackspace(object):
         log_green('finished image: %s' % image_id)
         return image_id
 
-
     def destroy(self):
-        server = self._nova.servers.find(name=self.instance_name)
+        server = self._nova.servers.find(name=self.state.instance_name)
         log_yellow('deleting rackspace instance ...')
         server.delete()
 
@@ -206,9 +200,8 @@ class Rackspace(object):
             pass
         log_green('The server has been deleted')
 
-
     def down(self):
-        server = self._nova.servers.find(name=self.instance_name)
+        server = self._nova.servers.find(name=self.state.instance_name)
 
         if server.status == "ACTIVE":
             with settings(hide('warnings', 'running', 'stdout', 'stderr'),
@@ -220,7 +213,6 @@ class Rackspace(object):
             sleep(10)
             server = self._nova.servers.get(server.id)
         log_yellow("Instance state: %s" % server.status)
-
 
     def get_state(self):
         # The minimum amount of data necessary to keep machine state

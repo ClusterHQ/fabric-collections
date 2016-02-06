@@ -1,5 +1,5 @@
 from zope.interface import Interface, Attribute
-from enum import Enum
+from flufl.enum import Enum
 
 
 class Distribution(Enum):
@@ -20,7 +20,7 @@ class ICloudInstanceFactory(Interface):
     configuration.
     """
 
-    def create_from_config(config, distro):
+    def create_from_config(config, distro, region):
         """
         Creates a new instance of the specified distro from the given
         configuration.
@@ -30,6 +30,7 @@ class ICloudInstanceFactory(Interface):
             configuration language and passed directly to this layer.
         :param Distribution distro: The distribution to spin the instance up
             as.
+        :param unicode region: The region to spin the instance up within.
 
         :return: An :class:`ICloudInstance` provider for a newly created
             instance with type distro.
@@ -56,18 +57,24 @@ class ICloudInstance(Interface):
     """
     Interface for interacting with a single cloud interface.
     """
+    cloud_type = Attribute(
+        """The name of the cloud this instance comes from.""")
+
     username = Attribute(
         """The username to use to log into the instance.""")
 
     key_filename = Attribute(
         """The filename of the private key to use to log into the instance.""")
 
-    distro = Attribute(
-        """The distribution used to create the base image. Must be one of the
-        enumerated values in Distribution.""")
-
     ip_address = Attribute(
         """Externally accessable IP address for the instance""")
+
+    distro = Attribute(
+        """The distribution on the instance. Should be one of the above """
+        """Distributions.""")
+
+    name = Attribute(
+        """The human readable name of the instance.""")
 
     def create_image(image_name):
         """
@@ -75,6 +82,8 @@ class ICloudInstance(Interface):
         instance in an up (booted) state.
 
         :param unicode image_name: The name of the image to create.
+
+        :returns: The unique identifier of the image.
         """
 
     def destroy():

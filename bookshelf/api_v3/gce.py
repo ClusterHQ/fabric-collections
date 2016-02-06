@@ -1,4 +1,3 @@
-import socket
 from time import time, sleep
 import uuid
 
@@ -9,10 +8,8 @@ from googleapiclient import discovery
 from googleapiclient.errors import HttpError
 
 from bookshelf.api_v2.logging_helpers import log_green, log_yellow, log_red
-from bookshelf.api_v1 import (
-    wait_for_ssh, linux_distribution, os_release
-)
-from cloud_instance import ICloudInstance, ICloudInstanceFactory
+from bookshelf.api_v1 import wait_for_ssh
+from cloud_instance import ICloudInstance, ICloudInstanceFactory, Distribution
 
 
 class DistributionConfiguration(PClass):
@@ -43,7 +40,7 @@ class GCEState(PClass):
 @provider(ICloudInstanceFactory)
 class GCE(object):
 
-    cloud = 'gce'
+    cloud_type = 'gce'
 
     def __init__(self, config, state):
         self.config = GCEConfiguration.create(config)
@@ -51,22 +48,6 @@ class GCE(object):
         self.distro_config = getattr(self.config, distro)
         self.state = state
         self._compute = self._get_gce_compute()
-        # self.distro = distro
-
-        # # config
-        # self.project = config['project']
-        # self.zone = region
-        # self.public_key_filename = config['public_key_filename']
-        # self.machine_type = config['machine_type']
-        # self.username = config['username']
-
-        # # distro
-        # self.base_image_prefix = config[distro]['base_image_prefix']
-        # self.base_image_project = config[distro]['base_image_project']
-        # self.description = config[distro]['description']
-
-        # # state (set when creating from saved state)
-        # self.ip_address = None
 
     @property
     def project(self):
@@ -78,14 +59,14 @@ class GCE(object):
 
     @property
     def distro(self):
-        return self.state.distro
+        return Distribution(self.state.distro)
 
     @property
     def description(self):
         return self.distro_config.description
 
     @property
-    def instance_name(self):
+    def name(self):
         return self.state.instance_name
 
     @property
@@ -94,6 +75,7 @@ class GCE(object):
 
     @classmethod
     def create_from_config(cls, config, distro, region):
+        distro = distro.value
         instance_name = "{}-{}".format(
             config[distro]['instance_name'],
             unicode(uuid.uuid4())
@@ -104,15 +86,14 @@ class GCE(object):
             distro=distro,
             zone=region
         )
-        gce_instance = GCE(config, state)
+        gce_instance = cls(config, state)
         gce_instance._create_server()
         return gce_instance
-
 
     @classmethod
     def create_from_saved_state(cls, config, saved_state):
         state = GCEState.create(saved_state)
-        instance = GCE(config, state)
+        instance = cls(config, state)
         instance._ensure_instance_running(saved_state['instance_name'])
         # if we've restarted a terminated server, the ip address
         # might have changed from our saved state, get the
@@ -138,17 +119,12 @@ class GCE(object):
             # the networking info, if we have
         except HttpError as e:
             if e.resp.status == 404:
-                log_red("Instance {} does not exist".format(
-                    instance_name)
-                )
-                log_yellow("you might need to remove state file."
-                )
+                log_red("Instance {} does not exist".format(instance_name))
+                log_yellow("you might need to remove state file.")
             else:
                 log_red("Unknown error querying for instance {}".format(
-                    instance_name)
-                )
+                    instance_name))
             raise e
-
 
     def _start_terminated_server(self, instance_name):
         log_yellow("starting terminated instance {}".format(instance_name))
@@ -159,10 +135,10 @@ class GCE(object):
         ).execute()
         self._wait_until_done(operation)
 
-
     def _set_instance_networking(self):
         instance_data = self._compute.instances().get(
-            project=self.project, zone=self.zone, instance=self.instance_name
+            project=self.project, zone=self.zone,
+            instance=self.state.instance_name
         ).execute()
 
         ip_address = (
@@ -173,7 +149,6 @@ class GCE(object):
         log_green('Connected to server with IP address {0}.'.format(
             ip_address))
 
-
     def _create_server(self):
         log_green("Started...")
         log_yellow("...Creating GCE instance...")
@@ -181,27 +156,26 @@ class GCE(object):
             self.distro_config.base_image_project,
             self.distro_config.base_image_prefix)
 
-        self.startup_instance(self.instance_name,
+        self.startup_instance(self.state.instance_name,
                               latest_image['selfLink'],
                               disk_name=None)
         self._set_instance_networking()
 
-
     def create_image(self, image_name):
         """
         Shuts down the instance and creates and image from the disk.
-        Assumes that the disk name is the same as the instance_name (this is the
-        default behavior for boot disks on GCE).
+        Assumes that the disk name is the same as the instance_name (this is
+        the default behavior for boot disks on GCE).
         """
 
-        disk_name = self.instance_name
+        disk_name = self.state.instance_name
         try:
             self.destroy()
         except HttpError as e:
             if e.resp.status == 404:
                 log_yellow(
                     "the instance {} is already down".format(
-                        self.instance_name)
+                        self.state.instance_name)
                 )
             else:
                 raise e
@@ -220,28 +194,26 @@ class GCE(object):
         )
         return image_name
 
-
     def down(self):
-        log_yellow("downing server: {}".format(self.instance_name))
+        log_yellow("downing server: {}".format(self.state.instance_name))
         self._wait_until_done(self._compute.instances().stop(
             project=self.project,
             zone=self.zone,
-            instance=self.instance_name
+            instance=self.state.instance_name
         ).execute())
 
     def destroy(self):
-        log_yellow("downing server: {}".format(self.instance_name))
+        log_yellow("downing server: {}".format(self.state.instance_name))
         self._wait_until_done(self._compute.instances().delete(
             project=self.project,
             zone=self.zone,
-            instance=self.instance_name
+            instance=self.state.instance_name
         ).execute())
 
-
     def _get_instance_config(self,
-                            instance_name,
-                            image,
-                            disk_name=None):
+                             instance_name,
+                             image,
+                             disk_name=None):
         public_key = open(self.config.public_key_filename, 'r').read()
         if disk_name:
             disk_config = {
@@ -313,7 +285,6 @@ class GCE(object):
         }
         return gce_slave_instance_config
 
-
     def startup_instance(self, instance_name, image, disk_name=None):
         """
         For now, jclouds is broken for GCE and we will have static slaves
@@ -331,15 +302,14 @@ class GCE(object):
         ).execute()
         result = self._wait_until_done(operation)
         if not result:
-            raise RuntimeError("Creation of VM timed out or returned no result")
+            raise RuntimeError(
+                "Creation of VM timed out or returned no result")
         log_green("Instance has booted")
-
 
     def _get_gce_compute(self):
         credentials = GoogleCredentials.get_application_default()
         compute = discovery.build('compute', 'v1', credentials=credentials)
         return compute
-
 
     def _wait_until_done(self, operation):
         """
@@ -390,7 +360,6 @@ class GCE(object):
                 log_yellow("waiting for operation")
         return latest_operation
 
-
     def _get_latest_image(self, base_image_project, image_name_prefix):
         """
         Gets the latest image for a distribution on gce.
@@ -423,7 +392,6 @@ class GCE(object):
             if not page_token:
                 break
         return latest_image
-
 
     def get_state(self):
         # The minimum amount of data necessary to keep machine state
