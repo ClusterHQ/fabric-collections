@@ -3,7 +3,7 @@ import uuid
 
 from zope.interface import implementer, provider
 from pyrsistent import PClass, field
-from oauth2client.client import GoogleCredentials
+from oauth2client.client import SignedJwtAssertionCredentials
 from googleapiclient import discovery
 from googleapiclient.errors import HttpError
 
@@ -13,11 +13,13 @@ from cloud_instance import ICloudInstance, ICloudInstanceFactory, Distribution
 
 
 class GCEConfiguration(PClass):
-    machine_type = field(factory=unicode, mandatory=True)
-    username = field(factory=unicode, mandatory=True)
+    credentials_private_key = field(factory=unicode, mandatory=True)
+    credentials_email = field(factory=unicode, mandatory=True)
     public_key_filename = field(factory=unicode, mandatory=True)
     private_key_filename = field(factory=unicode, mandatory=True)
     project = field(factory=unicode, mandatory=True)
+    machine_type = field(factory=unicode, mandatory=True)
+    username = field(factory=unicode, mandatory=True)
     description = field(factory=unicode, mandatory=True)
     instance_name = field(factory=unicode, mandatory=True)
     base_image_prefix = field(factory=unicode, mandatory=True)
@@ -47,6 +49,10 @@ class GCE(object):
         return self.config.project
 
     @property
+    def username(self):
+        return self.config.username
+
+    @property
     def zone(self):
         return self.state.zone
 
@@ -69,6 +75,10 @@ class GCE(object):
     @property
     def ip_address(self):
         return self.state.ip_address
+
+    @property
+    def key_filename(self):
+        return self.config.private_key_filename
 
     @classmethod
     def create_from_config(cls, config, distro, region):
@@ -302,7 +312,13 @@ class GCE(object):
         log_green("Instance has booted")
 
     def _get_gce_compute(self):
-        credentials = GoogleCredentials.get_application_default()
+        credentials = SignedJwtAssertionCredentials(
+            self.config.credentials_email,
+            self.config.credentials_private_key,
+            scope=[
+                u"https://www.googleapis.com/auth/compute",
+            ]
+        )
         compute = discovery.build('compute', 'v1', credentials=credentials)
         return compute
 
