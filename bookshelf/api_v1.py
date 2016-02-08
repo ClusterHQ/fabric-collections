@@ -514,8 +514,6 @@ def startup_gce_instance(instance_name, project, zone, username, machine_type,
         body=instance_config
     ).execute()
     result = gce_wait_until_done(operation)
-    print "HIHI"
-    print result
     if not result:
         raise RuntimeError("Creation of VM timed out or returned no result")
     log_green("Instance has booted")
@@ -1705,10 +1703,6 @@ def save_gce_state_locally(instance_name,
         'zone': zone,
         'instance_name': instance_name,
     }
-    print "HERE"
-    print env.user
-    print "==="
-    print env.key_filename
     data['distribution'] = linux_distribution(username, ip_address)
     data['os_release'] = os_release(username, ip_address)
     return _save_state_locally(data)
