@@ -3,7 +3,9 @@ import uuid
 
 from zope.interface import implementer, provider
 from pyrsistent import PClass, field
-from oauth2client.client import SignedJwtAssertionCredentials
+from oauth2client.client import (
+    SignedJwtAssertionCredentials, GoogleCredentials
+)
 from googleapiclient import discovery
 from googleapiclient.errors import HttpError
 
@@ -13,8 +15,8 @@ from cloud_instance import ICloudInstance, ICloudInstanceFactory, Distribution
 
 
 class GCEConfiguration(PClass):
-    credentials_private_key = field(factory=unicode, mandatory=True)
-    credentials_email = field(factory=unicode, mandatory=True)
+    credentials_private_key = field(factory=unicode, initial=u"", mandatory=True)
+    credentials_email = field(factory=unicode, initial=u"", mandatory=True)
     public_key_filename = field(factory=unicode, mandatory=True)
     private_key_filename = field(factory=unicode, mandatory=True)
     project = field(factory=unicode, mandatory=True)
@@ -312,13 +314,18 @@ class GCE(object):
         log_green("Instance has booted")
 
     def _get_gce_compute(self):
-        credentials = SignedJwtAssertionCredentials(
-            self.config.credentials_email,
-            self.config.credentials_private_key,
-            scope=[
-                u"https://www.googleapis.com/auth/compute",
-            ]
-        )
+        if (self.config.credentials_email and
+            self.config.credentials_private_key):
+
+            credentials = SignedJwtAssertionCredentials(
+                self.config.credentials_email,
+                self.config.credentials_private_key,
+                scope=[
+                    u"https://www.googleapis.com/auth/compute",
+                ]
+            )
+        else:
+            credentials = GoogleCredentials.get_application_default()
         compute = discovery.build('compute', 'v1', credentials=credentials)
         return compute
 

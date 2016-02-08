@@ -27,7 +27,6 @@ class RackspaceConfiguration(PClass):
     auth_system = field(factory=unicode, mandatory=True)
     auth_auth_url = field(factory=unicode, mandatory=True)
     tenant = field(factory=unicode, mandatory=True)
-    security_groups = field(factory=unicode, mandatory=True)
     ami = field(factory=unicode, mandatory=True)
     description = field(factory=unicode, mandatory=True)
     instance_name = field(factory=unicode, mandatory=True)
