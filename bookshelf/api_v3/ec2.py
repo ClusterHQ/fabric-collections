@@ -198,7 +198,7 @@ class EC2():
             region=region,
             disk_name=parsed_config.disk_name,
             disk_size=parsed_config.disk_size,
-            ami=parsed_config.config.ami,
+            ami=parsed_config.ami,
             key_pair=parsed_config.key_pair,
             instance_type=parsed_config.instance_type,
             tags=parsed_config.tags,
