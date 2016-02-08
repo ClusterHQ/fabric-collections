@@ -38,31 +38,16 @@ def _parse_unicode_pvector(l):
     return pvector([unicode(x) for x in l])
 
 
-class EC2DistroConfig(PClass):
-    """
-    Distribution-specific configuration values.
-    """
-    username = field(type=unicode, mandatory=True, factory=unicode)
-    instance_name = field(type=unicode, mandatory=True, factory=unicode)
-    amis = field(type=PMap, mandatory=True, factory=_parse_unicode_pmap)
-    tags = field(type=PMap, mandatory=True, factory=_parse_unicode_pmap)
-    image_description = field(type=unicode, mandatory=True, factory=unicode)
-
-
-def _parse_distro_info(config):
-    result = pmap()
-    for key, value in config.iteritems():
-        distro = Distribution(key)
-        result = result.set(distro, EC2DistroConfig.create(value))
-    return result
-
-
 class EC2Configuration(PClass):
     """
     The configuration needed to authenticate with EC2.
     """
     credentials = field(type=EC2Credentials, mandatory=True)
-    distros = field(mandatory=True, factory=_parse_distro_info)
+    username = field(type=unicode, mandatory=True, factory=unicode)
+    instance_name = field(type=unicode, mandatory=True, factory=unicode)
+    tags = field(type=PMap, mandatory=True, factory=_parse_unicode_pmap)
+    image_description = field(type=unicode, mandatory=True, factory=unicode)
+    ami = field(type=unicode, mandatory=True, factory=unicode)
     key_filename = field(type=unicode, mandatory=True, factory=unicode)
     key_pair = field(type=unicode, mandatory=True, factory=unicode)
     instance_type = field(type=unicode, mandatory=True, factory=unicode)
@@ -178,20 +163,16 @@ class EC2():
     cloud_type = u'ec2'
 
     @property
-    def _distro_config(self):
-        return self.config.distros[self.state.distro]
-
-    @property
     def ip_address(self):
         return self.instance.ip_address
 
     @property
     def name(self):
-        return self._distro_config.instance_name
+        return self.config.instance_name
 
     @property
     def username(self):
-        return self._distro_config.username
+        return self.config.username
 
     @property
     def key_filename(self):
@@ -201,6 +182,10 @@ class EC2():
     def distro(self):
         return self.state.distro
 
+    @property
+    def region(self):
+        return self.state.region
+
     @classmethod
     def create_from_config(cls, config, distro, region):
         parsed_config = EC2Configuration.create(config)
@@ -208,16 +193,15 @@ class EC2():
             region=region,
             credentials=parsed_config.credentials
         )
-        distro_config = parsed_config.distros[distro]
         instance = _create_server_ec2(
             connection=connection,
             region=region,
             disk_name=parsed_config.disk_name,
             disk_size=parsed_config.disk_size,
-            ami=distro_config.amis[region],
+            ami=parsed_config.config.ami,
             key_pair=parsed_config.key_pair,
             instance_type=parsed_config.instance_type,
-            tags=distro_config.tags,
+            tags=parsed_config.tags,
             security_groups=parsed_config.security_groups,
             delete_on_termination=True,
             log=False,
@@ -268,7 +252,7 @@ class EC2():
         ami = self.connection.create_image(
             self.state.instance_id,
             image_name,
-            description=self._distro_config.image_description,
+            description=self.config.image_description,
         )
 
         image_status = self.connection.get_image(ami)

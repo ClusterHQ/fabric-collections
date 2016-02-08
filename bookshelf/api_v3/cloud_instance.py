@@ -73,6 +73,8 @@ class ICloudInstance(Interface):
         """The distribution on the instance. Should be one of the above """
         """Distributions.""")
 
+    region = Attribute("""The region the instance is in.""")
+
     name = Attribute(
         """The human readable name of the instance.""")
 

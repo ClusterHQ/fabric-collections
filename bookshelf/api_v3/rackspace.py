@@ -14,12 +14,6 @@ from bookshelf.api_v2.logging_helpers import log_green, log_yellow, log_red
 from cloud_instance import ICloudInstance, ICloudInstanceFactory, Distribution
 
 
-class DistributionConfiguration(PClass):
-    ami = field(factory=unicode, mandatory=True)
-    description = field(factory=unicode, mandatory=True)
-    instance_name = field(factory=unicode, mandatory=True)
-
-
 class RackspaceConfiguration(PClass):
     username = field(factory=unicode, mandatory=True)
     disk_name = field(factory=unicode, mandatory=True)
@@ -35,8 +29,9 @@ class RackspaceConfiguration(PClass):
     auth_auth_url = field(factory=unicode, mandatory=True)
     tenant = field(factory=unicode, mandatory=True)
     security_groups = field(factory=unicode, mandatory=True)
-    ubuntu1404 = field(type=DistributionConfiguration, mandatory=True)
-    centos7 = field(type=DistributionConfiguration, mandatory=True)
+    ami = field(factory=unicode, mandatory=True)
+    description = field(factory=unicode, mandatory=True)
+    instance_name = field(factory=unicode, mandatory=True)
 
 
 class RackspaceState(PClass):
@@ -54,8 +49,6 @@ class Rackspace(object):
 
     def __init__(self, config, state):
         self.config = RackspaceConfiguration.create(config)
-        distro = state.distro
-        self.distro_config = getattr(self.config, distro)
         self.state = state
         self._nova = self._connect_to_rackspace()
 
@@ -65,7 +58,7 @@ class Rackspace(object):
 
     @property
     def description(self):
-        return self.distro_config.description
+        return self.config.description
 
     @property
     def ip_address(self):
@@ -75,11 +68,15 @@ class Rackspace(object):
     def name(self):
         return self.state.instance_name
 
+    @property
+    def region(self):
+        return self.state.region
+
     @classmethod
     def create_from_config(cls, config, distro, region):
         distro = distro.value
         instance_name = "{}-{}".format(
-            config[distro]['instance_name'],
+            config['instance_name'],
             unicode(uuid.uuid4())
         )
         state = RackspaceState(
@@ -125,7 +122,7 @@ class Rackspace(object):
     def _create_server(self):
         log_yellow("Creating Rackspace instance...")
         flavor = self._nova.flavors.find(name=self.config.instance_type)
-        image = self._nova.images.find(name=self.distro_config.ami)
+        image = self._nova.images.find(name=self.config.ami)
         server = self._nova.servers.create(
             name=self.state.instance_name,
             flavor=flavor.id,

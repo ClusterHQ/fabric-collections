@@ -12,21 +12,16 @@ from bookshelf.api_v1 import wait_for_ssh
 from cloud_instance import ICloudInstance, ICloudInstanceFactory, Distribution
 
 
-class DistributionConfiguration(PClass):
-    description = field(factory=unicode, mandatory=True)
-    instance_name = field(factory=unicode, mandatory=True)
-    base_image_prefix = field(factory=unicode, mandatory=True)
-    base_image_project = field(factory=unicode, mandatory=True)
-
-
 class GCEConfiguration(PClass):
     machine_type = field(factory=unicode, mandatory=True)
     username = field(factory=unicode, mandatory=True)
     public_key_filename = field(factory=unicode, mandatory=True)
     private_key_filename = field(factory=unicode, mandatory=True)
     project = field(factory=unicode, mandatory=True)
-    ubuntu1404 = field(type=DistributionConfiguration, mandatory=True)
-    centos7 = field(type=DistributionConfiguration, mandatory=True)
+    description = field(factory=unicode, mandatory=True)
+    instance_name = field(factory=unicode, mandatory=True)
+    base_image_prefix = field(factory=unicode, mandatory=True)
+    base_image_project = field(factory=unicode, mandatory=True)
 
 
 class GCEState(PClass):
@@ -44,8 +39,6 @@ class GCE(object):
 
     def __init__(self, config, state):
         self.config = GCEConfiguration.create(config)
-        distro = state.distro
-        self.distro_config = getattr(self.config, distro)
         self.state = state
         self._compute = self._get_gce_compute()
 
@@ -58,12 +51,16 @@ class GCE(object):
         return self.state.zone
 
     @property
+    def region(self):
+        return self.state.zone
+
+    @property
     def distro(self):
         return Distribution(self.state.distro)
 
     @property
     def description(self):
-        return self.distro_config.description
+        return self.config.description
 
     @property
     def name(self):
@@ -75,15 +72,14 @@ class GCE(object):
 
     @classmethod
     def create_from_config(cls, config, distro, region):
-        distro = distro.value
         instance_name = "{}-{}".format(
-            config[distro]['instance_name'],
+            config['instance_name'],
             unicode(uuid.uuid4())
         )
         state = GCEState(
             instance_name=instance_name,
             ip_address="",
-            distro=distro,
+            distro=distro.value,
             zone=region
         )
         gce_instance = cls(config, state)
@@ -153,8 +149,7 @@ class GCE(object):
         log_green("Started...")
         log_yellow("...Creating GCE instance...")
         latest_image = self._get_latest_image(
-            self.distro_config.base_image_project,
-            self.distro_config.base_image_prefix)
+            self.config.base_image_project, self.config.base_image_prefix)
 
         self.startup_instance(self.state.instance_name,
                               latest_image['selfLink'],
