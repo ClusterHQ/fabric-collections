@@ -16,8 +16,6 @@ from cloud_instance import ICloudInstance, ICloudInstanceFactory, Distribution
 
 class RackspaceConfiguration(PClass):
     username = field(factory=unicode, mandatory=True)
-    disk_name = field(factory=unicode, mandatory=True)
-    disk_size = field(factory=unicode, mandatory=True)
     instance_type = field(factory=unicode, mandatory=True)
     key_pair = field(factory=unicode, mandatory=True)
     public_key_filename = field(factory=unicode, mandatory=True)
@@ -25,9 +23,6 @@ class RackspaceConfiguration(PClass):
     image_basename = field(type=unicode, mandatory=True, factory=unicode)
     access_key_id = field(factory=unicode, mandatory=True)
     secret_access_key = field(factory=unicode, mandatory=True)
-    auth_system = field(factory=unicode, mandatory=True)
-    auth_auth_url = field(factory=unicode, mandatory=True)
-    tenant = field(factory=unicode, mandatory=True)
     ami = field(factory=unicode, mandatory=True)
     description = field(factory=unicode, mandatory=True)
     instance_name = field(factory=unicode, mandatory=True)
@@ -209,7 +204,9 @@ class Rackspace(object):
 
         if server.status == "ACTIVE":
             with settings(hide('warnings', 'running', 'stdout', 'stderr'),
-                          warn_only=True, capture=True):
+                          warn_only=True, capture=True,
+                          key_filename=self.key_filename, user=self.username,
+                          host_string=self.ip_address):
                 sudo('/sbin/halt')
 
         while server.status == "ACTIVE":
