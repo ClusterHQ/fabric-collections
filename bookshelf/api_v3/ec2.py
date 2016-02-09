@@ -47,6 +47,7 @@ class EC2Configuration(PClass):
     instance_name = field(type=unicode, mandatory=True, factory=unicode)
     tags = field(type=PMap, mandatory=True, factory=_parse_unicode_pmap)
     image_description = field(type=unicode, mandatory=True, factory=unicode)
+    image_basename = field(type=unicode, mandatory=True, factory=unicode)
     ami = field(type=unicode, mandatory=True, factory=unicode)
     key_filename = field(type=unicode, mandatory=True, factory=unicode)
     key_pair = field(type=unicode, mandatory=True, factory=unicode)
@@ -167,8 +168,8 @@ class EC2():
         return self.instance.ip_address
 
     @property
-    def name(self):
-        return self.config.instance_name
+    def image_basename(self):
+        return self.config.image_basename
 
     @property
     def username(self):

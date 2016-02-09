@@ -75,8 +75,9 @@ class ICloudInstance(Interface):
 
     region = Attribute("""The region the instance is in.""")
 
-    name = Attribute(
-        """The human readable name of the instance.""")
+    image_basename = Attribute(
+        "The basename for the image. The final name will look like"
+        "image_basename-YYYYMMDDHHMMSS")
 
     def create_image(image_name):
         """

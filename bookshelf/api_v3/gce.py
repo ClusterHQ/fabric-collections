@@ -21,6 +21,7 @@ class GCEConfiguration(PClass):
     private_key_filename = field(factory=unicode, mandatory=True)
     project = field(factory=unicode, mandatory=True)
     machine_type = field(factory=unicode, mandatory=True)
+    image_basename = field(type=unicode, mandatory=True, factory=unicode)
     username = field(factory=unicode, mandatory=True)
     description = field(factory=unicode, mandatory=True)
     instance_name = field(factory=unicode, mandatory=True)
@@ -71,8 +72,8 @@ class GCE(object):
         return self.config.description
 
     @property
-    def name(self):
-        return self.state.instance_name
+    def image_basename(self):
+        return self.config.image_basename
 
     @property
     def ip_address(self):
