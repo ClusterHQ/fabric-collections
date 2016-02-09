@@ -137,7 +137,8 @@ def _create_server_ec2(connection,
                                       ["%s=%d" % (dev, 1)])
 
     # add a tag to our instance
-    connection.create_tags([instance.id], tags)
+    if tags:
+        connection.create_tags([instance.id], tags)
 
     if log:
         log_green("Public dns: %s" % instance.public_dns_name)

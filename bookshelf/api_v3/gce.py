@@ -209,16 +209,7 @@ class GCEInstance(object):
         """
 
         disk_name = self.state.instance_name
-        try:
-            self.destroy()
-        except HttpError as e:
-            if e.resp.status == 404:
-                log_yellow(
-                    "the instance {} is already down".format(
-                        self.state.instance_name)
-                )
-            else:
-                raise e
+        self._destroy_instance()
 
         body = {
             "rawDisk": {},
@@ -259,13 +250,39 @@ class GCEInstance(object):
             instance=self.state.instance_name
         ).execute())
 
+    def _destroy_instance(self):
+        log_yellow("destroying server: {}".format(self.state.instance_name))
+        try:
+            self._wait_until_done(self._compute.instances().delete(
+                project=self.project,
+                zone=self.zone,
+                instance=self.state.instance_name
+            ).execute())
+        except HttpError as e:
+            if e.resp.status == 404:
+                log_yellow(
+                    "the instance {} is already down".format(
+                        self.state.instance_name)
+                )
+            else:
+                raise e
+
     def destroy(self):
-        log_yellow("downing server: {}".format(self.state.instance_name))
-        self._wait_until_done(self._compute.instances().delete(
-            project=self.project,
-            zone=self.zone,
-            instance=self.state.instance_name
-        ).execute())
+        disk_name = self.state.instance_name
+        self._destroy_instance()
+        try:
+            self._wait_until_done(self._compute.disks().delete(
+                project=self.project,
+                zone=self.zone,
+                disk=disk_name
+            ).execute())
+        except HttpError as e:
+            if e.resp.status == 404:
+                log_yellow(
+                    "the disk {} was already destroyed".format(disk_name)
+                )
+            else:
+                raise e
 
     def _get_instance_config(self,
                              instance_name,
