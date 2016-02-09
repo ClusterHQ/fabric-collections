@@ -1,3 +1,7 @@
+"""
+Helpful docs for the GCE Python API
+https://google-api-client-libraries.appspot.com/documentation/compute/v1/python/latest/
+"""
 from time import time, sleep
 import uuid
 
@@ -15,7 +19,12 @@ from cloud_instance import ICloudInstance, ICloudInstanceFactory, Distribution
 
 
 class GCEConfiguration(PClass):
-    credentials_private_key = field(factory=unicode, initial=u"", mandatory=True)
+    """
+    Contains all the information needed to provision a GCE instance
+    and image.
+    """
+    credentials_private_key = field(
+        factory=unicode, initial=u"", mandatory=True)
     credentials_email = field(factory=unicode, initial=u"", mandatory=True)
     public_key_filename = field(factory=unicode, mandatory=True)
     private_key_filename = field(factory=unicode, mandatory=True)
@@ -30,6 +39,10 @@ class GCEConfiguration(PClass):
 
 
 class GCEState(PClass):
+    """
+    The necessary information to easily reconnect to an existing GCE
+    instance.
+    """
     instance_name = field(factory=unicode, mandatory=True)
     ip_address = field(factory=unicode, mandatory=True)
     distro = field(factory=unicode, mandatory=True)
@@ -38,8 +51,16 @@ class GCEState(PClass):
 
 @implementer(ICloudInstance)
 @provider(ICloudInstanceFactory)
-class GCE(object):
+class GCEInstance(object):
+    """
+    Class that represents a GCE instance. Provides a simple
+    set of methods for interacting with that instance.
 
+    :ivar config: a mapping object holding data that can be read into
+    a GCEConfiguration object.
+    :ivar GCEState state: the saved state for an existing or newly created
+    instance.
+    """
     cloud_type = 'gce'
 
     def __init__(self, config, state):
@@ -89,6 +110,7 @@ class GCE(object):
             config['instance_name'],
             unicode(uuid.uuid4())
         )
+        assert len(instance_name) <= 61, "Instance name too long for GCE"
         state = GCEState(
             instance_name=instance_name,
             ip_address="",
@@ -111,6 +133,11 @@ class GCE(object):
         return instance
 
     def _ensure_instance_running(self, instance_name):
+        """
+        If an instance is terminated but still exists (hasn't been deleted
+        calling this will start the instance up again. Raises an error
+        if the instance no longer exists.
+        """
         try:
             instance_info = self._compute.instances().get(
                 project=self.project, zone=self.zone, instance=instance_name
@@ -145,6 +172,10 @@ class GCE(object):
         self._wait_until_done(operation)
 
     def _set_instance_networking(self):
+        """
+        Pulls out the IP address for the instance and double checks that
+        we can connect to it's ssh port.
+        """
         instance_data = self._compute.instances().get(
             project=self.project, zone=self.zone,
             instance=self.state.instance_name
@@ -171,9 +202,10 @@ class GCE(object):
 
     def create_image(self, image_name):
         """
-        Shuts down the instance and creates and image from the disk.
-        Assumes that the disk name is the same as the instance_name (this is
-        the default behavior for boot disks on GCE).
+        Shuts down the instance (necessary for creating a GCE image) and
+        creates and image from the disk.  Assumes that the disk name
+        is the same as the instance_name (this is the default behavior
+        for boot disks on GCE).
         """
 
         disk_name = self.state.instance_name
@@ -202,6 +234,23 @@ class GCE(object):
         )
         return image_name
 
+    def list_images(self):
+        results = self._compute.images().list(project=self.project).execute()
+        log_yellow("creation time\timage_name")
+        for item in results['items']:
+            log_green("{}\t{}".format(item['creationTimestamp'],
+                                      item['name']))
+
+    def delete_image(self, image_name):
+        log_green("Deleting image {}".format(image_name))
+        result = self._wait_until_done(
+            self._compute.images().delete(
+                project=self.project, image=image_name).execute()
+        )
+        log_yellow("Delete image returned status {}".format(
+            result['statusMessage'])
+        )
+
     def down(self):
         log_yellow("downing server: {}".format(self.state.instance_name))
         self._wait_until_done(self._compute.instances().stop(
@@ -222,6 +271,10 @@ class GCE(object):
                              instance_name,
                              image,
                              disk_name=None):
+        """
+        Returns the configuration dictionary used to create a new GCE
+        instance.
+        """
         public_key = open(self.config.public_key_filename, 'r').read()
         if disk_name:
             disk_config = {
@@ -413,9 +466,11 @@ class GCE(object):
         return latest_image
 
     def get_state(self):
-        # The minimum amount of data necessary to keep machine state
-        # everything else can be pulled from the config
-
+        """
+        The minimum amount of data necessary (plus a little more for ease
+        of use) to keep machine state everything else can be pulled
+        from the config.
+        """
         data = {
             'ip_address': self.state.ip_address,
             'instance_name': self.state.instance_name,

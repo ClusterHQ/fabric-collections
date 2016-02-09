@@ -5,6 +5,7 @@ import uuid
 from zope.interface import implementer, provider
 from pyrsistent import PClass, field
 import pyrax
+#from novaclient.servers import REBOOT_HARD
 from novaclient.exceptions import NotFound
 from fabric.api import sudo, settings
 from fabric.context_managers import hide
@@ -42,7 +43,7 @@ class RackspaceState(PClass):
 
 @implementer(ICloudInstance)
 @provider(ICloudInstanceFactory)
-class Rackspace(object):
+class RackspaceInstance(object):
 
     cloud_type = 'rackspace'
 
@@ -92,13 +93,12 @@ class Rackspace(object):
             distro=distro,
             region=region
         )
-        instance = Rackspace(config, state)
+        instance = cls(config, state)
         instance.upload_key()
         instance._create_server()
         return instance
 
     def upload_key(self):
-
         try:
             log_green("Checking for key pair {}".format(self.config.key_pair))
             self._nova.keypairs.get(self.config.key_pair)
@@ -112,19 +112,13 @@ class Rackspace(object):
     @classmethod
     def create_from_saved_state(cls, config, saved_state):
         state = RackspaceState.create(saved_state)
-        instance = Rackspace(config, state)
-        server = instance._ensure_instance_running()
+        instance = cls(config, state)
+        server = instance._nova.servers.find(name=instance.state.instance_name)
         # if we've restarted a terminated server, the ip address
         # might have changed from our saved state, get the
         # networking info and resave the state
         instance._set_instance_networking(server)
         return instance
-
-    def _ensure_instance_running(self):
-        server = self._nova.servers.find(name=self.state.instance_name)
-        if server.status != "ACTIVE":
-            server.start()
-        return server
 
     def _create_server(self):
         log_yellow("Creating Rackspace instance...")
@@ -190,6 +184,17 @@ class Rackspace(object):
         log_green('finished image: %s' % image_id)
         return image_id
 
+    def list_images(self):
+        images = self._nova.images.list()
+        log_yellow("creation time\timage_name\timage_id")
+        for image in sorted(images, key=lambda x: x.created):
+            log_green("{}\t{:50}\t{}".format(
+                image.created, image.human_id, image.id)
+            )
+
+    def delete_image(self, image_id):
+        return self._nova.images.delete(image_id)
+
     def destroy(self):
         server = self._nova.servers.find(name=self.state.instance_name)
         log_yellow('deleting rackspace instance ...')
@@ -205,23 +210,17 @@ class Rackspace(object):
         log_green('The server has been deleted')
 
     def down(self):
-        server = self._nova.servers.find(name=self.state.instance_name)
-
-        if server.status == "ACTIVE":
-            with settings(hide('warnings', 'running', 'stdout', 'stderr'),
-                          warn_only=True, capture=True):
-                sudo('/sbin/halt')
-
-        while server.status == "ACTIVE":
-            log_yellow("Instance state: %s" % server.status)
-            sleep(10)
-            server = self._nova.servers.get(server.id)
-        log_yellow("Instance state: %s" % server.status)
+        """
+        Not raising an exception here because I'm a pushover, settle for
+        just yelling loudly at the user.
+        """
+        log_red("Rackspace instances can't be downed, just keeping it running")
+        log_red("/Tableflip :( ")
 
     def get_state(self):
-        # The minimum amount of data necessary to keep machine state
-        # everything else can be pulled from the config
-
+        """
+        Get the state that's needed to reconnect to the instance
+        """
         data = {
             'instance_name': self.state.instance_name,
             'ip_address': self.state.ip_address,

@@ -15,9 +15,9 @@ class Distribution(Enum):
 
 class ICloudInstanceFactory(Interface):
     """
-    Interface for an object that can create cloud instances either from some
-    existing serialized state, or create a new cloud instance from a
-    configuration.
+    Interface for an object that can create cloud instances either
+    from some existing serialized/saved state, or create a new cloud
+    instance from a configuration.
     """
 
     def create_from_config(config, distro, region):
@@ -42,10 +42,12 @@ class ICloudInstanceFactory(Interface):
         Re-create or connect to an existing cloud instance as specified in some
         saved state and configuration.
 
-        :param config: An opaque dict of configuration that might be specific
-            to a given implementation
-        :param saved_state: The serialization state of an instance created by
-            serializing a previously
+        :param config: An opaque dict of configuration that might be
+            specific to a given implementation
+        :param saved_state: The serialized state of an instance that
+            has most likely been loaded from disk (e.g. a json file).
+            This saved state will be used to reconnect to an existing
+            instance.
 
         :return: An :class:`ICloudInstance` provider loaded from the
             saved_state.
@@ -87,6 +89,18 @@ class ICloudInstance(Interface):
         :param unicode image_name: The name of the image to create.
 
         :returns: The unique identifier of the image.
+        """
+
+    def delete_image(image_name):
+        """
+        Hack: This should not go in the instance as it's a general cloud
+        operation. If more general cloud operaions are needed, they
+        should be broken out of the Instance object into their own
+        thing.
+
+        Deletes an image from the cloud
+
+        :param unicode image_name: the name of the image to delete
         """
 
     def destroy():

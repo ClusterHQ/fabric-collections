@@ -15,6 +15,10 @@ from bookshelf.api_v2.cloud import wait_for_ssh
 
 
 class EC2State(PClass):
+    """
+    Information about the ec2 instance that will later be used to
+    reconnecto to the instance.
+    """
     instance_id = field(type=unicode, mandatory=True, factory=unicode)
     region = field(type=unicode, mandatory=True, factory=unicode)
     distro = field(mandatory=True, factory=Distribution,
@@ -40,7 +44,7 @@ def _parse_unicode_pvector(l):
 
 class EC2Configuration(PClass):
     """
-    The configuration needed to authenticate with EC2.
+    The configuration needed to create an EC2 instance and image
     """
     credentials = field(type=EC2Credentials, mandatory=True)
     username = field(type=unicode, mandatory=True, factory=unicode)
@@ -144,7 +148,7 @@ def _create_server_ec2(connection,
 
 @implementer(ICloudInstance)
 @provider(ICloudInstanceFactory)
-class EC2():
+class EC2Instance():
     """
     Class representing an EC2 instance, that provides methods for interacting
     with the instance.
@@ -222,7 +226,7 @@ class EC2():
         )
 
     @classmethod
-    def create_from_saved_state(cls, config, saved_state):
+    def create_from_saved_state(cls, config, saved_state, timeout=600):
         parsed_config = EC2Configuration.create(config)
         state = EC2State.create(saved_state)
         connection = _connect_to_ec2(
@@ -230,7 +234,6 @@ class EC2():
             credentials=parsed_config.credentials
         )
 
-        timeout = 600
         instance = connection.start_instances(
             instance_ids=state.instance_id)[0]
         instance.update()
@@ -269,6 +272,26 @@ class EC2():
         else:
             log_red("ami %s %s" % (ami, image_status))
             return False
+
+    def list_images(self):
+        images = self.connection.get_all_images(owners='self')
+        log_yellow("creation time\timage_name\timage_id")
+        for image in sorted(images, key=lambda x: x.creationDate):
+            log_green("{}\t{:50}\t{}".format(
+                image.creationDate, image.name, image.id)
+            )
+
+    def delete_image(self, image_id):
+        images = self.connection.get_all_images(owners='self')
+        found = False
+        for image in images:
+            if image.id == image_id:
+                log_yellow("Deleting image {}".format(image_id))
+                image.deregister(delete_snapshot=True)
+                found = True
+                break
+        if not found:
+            log_red("Could not find image {}".format(image_id))
 
     def _ebs_volume_exists(self, volume_id):
         """ finds out if a ebs volume exists """
