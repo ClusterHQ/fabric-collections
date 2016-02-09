@@ -6,9 +6,11 @@ import yaml
 import os
 
 from bookshelf.api_v3.cloud_instance import Distribution, ICloudInstance
-from bookshelf.api_v3.rackspace import Rackspace, RackspaceConfiguration
-from bookshelf.api_v3.gce import GCE, GCEConfiguration
-from bookshelf.api_v3.ec2 import EC2, EC2Configuration, EC2Credentials
+from bookshelf.api_v3.rackspace import (
+    RackspaceInstance, RackspaceConfiguration
+)
+from bookshelf.api_v3.gce import GCEInstance, GCEConfiguration
+from bookshelf.api_v3.ec2 import EC2Instance, EC2Configuration, EC2Credentials
 from zope.interface.verify import verifyObject
 
 
@@ -112,7 +114,8 @@ class CloudInstanceTestMixin(object):
         unique_id = revived_instance.create_image(
             'testing-image-%s' % str(uuid4()))
 
-        print "Would you mind deleting %s for me?" % unique_id
+        revived_instance.list_images()
+        revived_instance.delete_image(unique_id)
 
 
 class MissingConfigError(Exception):
@@ -150,35 +153,11 @@ def _extract_substructure(base, substructure):
             "Missing key {} in configuration".format(e.args[0]))
 
 
-def _extract_substructure_from_yaml(filename, substructure):
+def _load_config_from_yaml():
     """
-    Parse filename as a yaml file, an extract the keys in substructure, which
-    may be a nested dictionary.
-    """
-    with open(filename) as f:
-        config = yaml.safe_load(f)
-    try:
-        return _extract_substructure(config, substructure)
-    except MissingConfigError as e:
-        print (
-            'Skipping test: could not get configuration: {}\n\n'
-            'In order to run this test, add ensure {} has structure '
-            'like:\n\n{}'.format(
-                e.message,
-                filename,
-                yaml.dump(substructure, default_flow_style=False)))
-        raise unittest.SkipTest()
+    Load configuration from a yaml file specified in an environment variable.
 
-
-def _get_yaml_config(substructure):
-    """
-    Extract the keys from the config in substructure, which may be a nested
-    dictionary.
-
-    Raises a ``unittest.SkipTest`` if the substructure is not found in the
-    configuration.
-
-    This can be used to load credentials all at once for testing purposes.
+    Raises a SkipTest exception if the environment variable is not specified.
     """
     _ENV_VAR = 'ACCEPTANCE_YAML'
     filename = os.environ.get(_ENV_VAR)
@@ -191,15 +170,29 @@ def _get_yaml_config(substructure):
         raise unittest.SkipTest()
     with open(filename) as f:
         config = yaml.safe_load(f)
+    return config
+
+
+def _get_yaml_config(substructure, config=None):
+    """
+    Extract the keys from the config in substructure, which may be a nested
+    dictionary.
+
+    Raises a ``unittest.SkipTest`` if the substructure is not found in the
+    configuration.
+
+    This can be used to load credentials all at once for testing purposes.
+    """
+    if config is None:
+        config = _load_config_from_yaml()
     try:
         return _extract_substructure(config, substructure)
     except MissingConfigError as e:
         print (
             'Skipping test: could not get configuration: {}\n\n'
-            'In order to run this test, add ensure {} has structure '
-            'like:\n\n{}'.format(
+            'In order to run this test, add ensure file at $ACCEPTANCE_YAML '
+            'has structure like:\n\n{}'.format(
                 e.message,
-                filename,
                 yaml.dump(substructure, default_flow_style=False)))
         raise unittest.SkipTest()
 
@@ -217,7 +210,7 @@ class RackspaceTests(unittest.TestCase, CloudInstanceTestMixin):
                 'rackspace': {
                     'keyname': '<Rackspace keypair name>',
                     'username': '<Rackspace username>',
-                    'key': '<Rackspace secret auth key>',
+                    'key': '<Rackspace API key>',
                 },
                 'ssh_keys': {
                     'rackspace': {
@@ -244,7 +237,7 @@ class RackspaceTests(unittest.TestCase, CloudInstanceTestMixin):
         ).serialize()
         self.distribution = Distribution.CENTOS7
         self.region = 'HKG'
-        self.instance_factory = Rackspace
+        self.instance_factory = RackspaceInstance
 
 
 class GCETests(unittest.TestCase, CloudInstanceTestMixin):
@@ -254,7 +247,7 @@ class GCETests(unittest.TestCase, CloudInstanceTestMixin):
 
     def setUp(self):
         super(GCETests, self).setUp()
-
+        raw_config = _load_config_from_yaml()
         credentials = _get_yaml_config(
             {
                 'gce': {
@@ -266,11 +259,21 @@ class GCETests(unittest.TestCase, CloudInstanceTestMixin):
                         'public_key_file': '<path-to-corresponding-public-key>'
                     }
                 }
-            }
+            },
+            config=raw_config
         )
 
         keys = credentials["ssh_keys"]["gce"]
+
+        # If specified, attempt to use the service account credentials from
+        # `acceptance.yml` rather than the default authentication method.
+        service_account_creds = (
+            raw_config.get('gce', {}).get('gce_credentials', {}))
+
         self.config = GCEConfiguration(
+            credentials_private_key=(
+                service_account_creds.get('private_key', '')),
+            credentials_email=service_account_creds.get('client_email', ''),
             public_key_filename=keys["public_key_file"],
             private_key_filename=keys["private_key_file"],
             project=credentials["gce"]["project"],
@@ -284,7 +287,7 @@ class GCETests(unittest.TestCase, CloudInstanceTestMixin):
         ).serialize()
         self.distribution = Distribution.UBUNTU1404
         self.region = 'us-central1-f'
-        self.instance_factory = GCE
+        self.instance_factory = GCEInstance
 
 
 class EC2Tests(unittest.TestCase, CloudInstanceTestMixin):
@@ -330,7 +333,7 @@ class EC2Tests(unittest.TestCase, CloudInstanceTestMixin):
         ).serialize()
         self.distribution = Distribution.CENTOS7
         self.region = 'us-west-2'
-        self.instance_factory = EC2
+        self.instance_factory = EC2Instance
 
 if __name__ == '__main__':
     unittest.main()
