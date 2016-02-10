@@ -14,11 +14,12 @@ matrix:
   fast_finish: true
 
 env:
-  - TEST_SUITE=test_pkg.py
-  - TEST_SUITE=test_file.py
-  - TEST_SUITE=test_java.py
-  - TEST_SUITE=test_git.py
-  - TEST_SUITE=test_python.py
+  - TEST_SUITE=api_v2/test_pkg.py
+  - TEST_SUITE=api_v2/test_file.py
+  - TEST_SUITE=api_v2/test_java.py
+  - TEST_SUITE=api_v2/test_git.py
+  - TEST_SUITE=api_v2/test_python.py
+  - TEST_SUITE=api_v3/test_interfaces.py
   # we can't run vagrant on Travis.CI, as it uses OpenVZ
   # so we need to skip the docker tests for now
   # - TEST_SUITE=test_docker.py
@@ -30,4 +31,4 @@ env:
 install:
   - pip install .
 
-script: "python bookshelf/tests/api_v2/$TEST_SUITE"
+script: "export PYTHONPATH=`pwd` && python bookshelf/tests/$TEST_SUITE"

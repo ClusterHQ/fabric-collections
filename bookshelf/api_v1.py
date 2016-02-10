@@ -9,7 +9,7 @@ import socket
 import sys
 import uuid
 from time import time, sleep
-from pprint  import pformat
+from pprint import pformat
 
 from boto.ec2.blockdevicemapping import BlockDeviceMapping, EBSBlockDeviceType
 from oauth2client.client import GoogleCredentials
@@ -425,6 +425,7 @@ def gce_wait_until_done(operation):
 
 def get_gce_instance_config(instance_name, project, zone, machine_type, image,
                             username, public_key, disk_name=None):
+    public_key = open(public_key, 'r').read()
     if disk_name:
         disk_config = {
             "type": "PERSISTENT",
@@ -459,7 +460,7 @@ def get_gce_instance_config(instance_name, project, zone, machine_type, image,
         "networkInterfaces": [
             {
                 "network": (
-                    "projects/clusterhq-acceptance/global/networks/default"
+                    "projects/%s/global/networks/default" % project
                 ),
                 "accessConfigs": [
                     {
