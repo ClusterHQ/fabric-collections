@@ -239,7 +239,7 @@ class GCEInstance(object):
                 project=self.project, image=image_name).execute()
         )
         log_yellow("Delete image returned status {}".format(
-            result['statusMessage'])
+            result['status'])
         )
 
     def down(self):
