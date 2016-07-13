@@ -7,10 +7,12 @@ class Distribution(Enum):
     Enumeration of distributions supported by the bookshelf v3 api.
 
     :ivar CENTOS7: constant for CentOS 7.
-    :ivar UBUNTU1404: constante for Ubuntu LTS 14.04.
+    :ivar UBUNTU1404: constant for Ubuntu LTS 14.04.
+    :ivar UBUNTU1604: constant for Ubuntu LTS 16.04.
     """
     CENTOS7 = u"centos7"
     UBUNTU1404 = u"ubuntu1404"
+    UBUNTU1604 = u"ubuntu1604"
 
 
 class ICloudInstanceFactory(Interface):
